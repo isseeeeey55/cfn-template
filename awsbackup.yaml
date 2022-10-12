@@ -1,0 +1,401 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Generic AWS Backup Settings.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: Project Configuration
+        Parameters:
+          - SystemName
+          - Env
+
+      -
+        Label:
+          default: Backup Cron Configuration
+        Parameters:
+          - DailyBackupCron
+          - WeeklyBackupCron
+          - MonthlyBackupCron
+
+      -
+        Label:
+          default: Backup Window Configuration
+        Parameters:
+          - StartWindowMinutes
+          - CompletionWindowMinutes
+
+      -
+        Label:
+          default: Backup Retention Configuration
+        Parameters:
+          - DailyBackupRetention
+          - WeeklyBackupRetention
+          - MonthlyBackupRetention
+
+      # -
+      #   Label:
+      #     default: Copy Configuration
+      #   Parameters:
+      #     - DestinationVaultArn
+
+Parameters:
+  SystemName:
+    Description: Please enter the SystemName
+    Type: String
+    Default: sample
+
+  Env:
+    Description: Please enter the Env
+    Type: String
+    Default: test
+
+  DailyBackupCron:
+    Description: DailyBackup Time(cron)
+    Type: String
+    Default: cron(0 18 * * ? *)
+
+  WeeklyBackupCron:
+    Description: WeeklyBackup Time(cron)
+    Type: String
+    Default: cron(0 18 ? * FRI *)
+
+  MonthlyBackupCron:
+    Description: MonthlyBackup Time(cron)
+    Type: String
+    Default: cron(0 18 1 * ? *)
+
+  StartWindowMinutes:
+    Description: Minutes Until Backup Job Starts
+    Type: String
+    Default: 480
+
+  CompletionWindowMinutes:
+    Description: Minutes until backup job completes successfully
+    Type: String
+    Default: 1440
+
+  DailyBackupRetention:
+    Description: DailyBackup retention period
+    Type: String
+    Default: 4
+
+  WeeklyBackupRetention:
+    Description: WeeklyBackup retention period
+    Type: String
+    Default: 14
+
+  MonthlyBackupRetention:
+    Description: MonthlyBackup retention period
+    Type: String
+    Default: 62
+
+  # DestinationVaultArn:
+  #   Description: Destination backup vault arn
+  #   Type: String
+  #   Default: arn:aws:backup:ap-northeast-3:XXXXXXXXXXXX:backup-vault:sample-backup-vault
+
+Resources:
+  BackupVault:
+    Type: "AWS::Backup::BackupVault"
+    Properties:
+      BackupVaultName: !Sub ${SystemName}-${Env}-vault
+      BackupVaultTags:
+        Name: !Sub ${SystemName}-${Env}-vault
+        System: !Sub ${SystemName}
+        Env: !Sub ${Env}
+
+  DailyBackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Sub ${SystemName}-${Env}-daily-plan
+        BackupPlanRule:
+          - RuleName: daily-rule
+            TargetBackupVault: !Ref BackupVault
+            ScheduleExpression: !Ref DailyBackupCron
+            StartWindowMinutes: !Ref StartWindowMinutes
+            CompletionWindowMinutes: !Ref CompletionWindowMinutes
+            RecoveryPointTags:
+              System: !Sub ${SystemName}
+              Env: !Sub ${Env}
+            Lifecycle:
+              DeleteAfterDays: !Ref DailyBackupRetention
+            # CopyActions:
+            #   - DestinationBackupVaultArn: !Ref DestinationVaultArn
+      BackupPlanTags:
+        Name: !Sub ${SystemName}-${Env}-daily-plan
+        System: !Sub ${SystemName}
+        Env: !Sub ${Env}
+
+  DailyBackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !Ref DailyBackupPlan
+      BackupSelection:
+        SelectionName: assign-by-tag
+        IamRoleArn: !GetAtt AWSBackupRole.Arn
+        ListOfTags:
+          -
+            ConditionType: STRINGEQUALS
+            ConditionKey: DailyBackup
+            ConditionValue: true
+
+  WeeklyBackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Sub ${SystemName}-${Env}-weekly-plan
+        BackupPlanRule:
+          - RuleName: weekly-rule
+            TargetBackupVault: !Ref BackupVault
+            ScheduleExpression: !Ref WeeklyBackupCron
+            StartWindowMinutes: !Ref StartWindowMinutes
+            CompletionWindowMinutes: !Ref CompletionWindowMinutes
+            RecoveryPointTags:
+              System: !Sub ${SystemName}
+              Env: !Sub ${Env}
+            Lifecycle:
+              DeleteAfterDays: !Ref WeeklyBackupRetention
+            # CopyActions:
+            #   - DestinationBackupVaultArn: !Ref DestinationVaultArn
+      BackupPlanTags:
+        Name: !Sub ${SystemName}-${Env}-weekly-plan
+        System: !Sub ${SystemName}
+        Env: !Sub ${Env}
+
+  WeeklyBackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !Ref WeeklyBackupPlan
+      BackupSelection:
+        SelectionName: assign-by-tag
+        IamRoleArn: !GetAtt AWSBackupRole.Arn
+        ListOfTags:
+          -
+            ConditionType: STRINGEQUALS
+            ConditionKey: WeeklyBackup
+            ConditionValue: true
+
+  MonthlyBackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Sub ${SystemName}-${Env}-monthly-plan
+        BackupPlanRule:
+          - RuleName: monthly-rule
+            TargetBackupVault: !Ref BackupVault
+            ScheduleExpression: !Ref MonthlyBackupCron
+            StartWindowMinutes: !Ref StartWindowMinutes
+            CompletionWindowMinutes: !Ref CompletionWindowMinutes
+            RecoveryPointTags:
+              System: !Sub ${SystemName}
+              Env: !Sub ${Env}
+            Lifecycle:
+              DeleteAfterDays: !Ref MonthlyBackupRetention
+            # CopyActions:
+            #   - DestinationBackupVaultArn: !Ref DestinationVaultArn
+      BackupPlanTags:
+        Name: !Sub ${SystemName}-${Env}-monthly-plan
+        System: !Sub ${SystemName}
+        Env: !Sub ${Env}
+
+  MonthlyBackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !Ref MonthlyBackupPlan
+      BackupSelection:
+        SelectionName: assign-by-tag
+        IamRoleArn: !GetAtt AWSBackupRole.Arn
+        ListOfTags:
+          -
+            ConditionType: STRINGEQUALS
+            ConditionKey: MonthlyBackup
+            ConditionValue: true
+
+  S3BackupPolicy:
+      Type: "AWS::IAM::ManagedPolicy"
+      Properties:
+        ManagedPolicyName: !Sub ${SystemName}-${Env}-s3-backup-policy
+        Path: /
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: "S3BucketBackupPermissions"
+              Effect: Allow
+              Action:
+                - "s3:GetInventoryConfiguration"
+                - "s3:PutInventoryConfiguration"
+                - "s3:ListBucketVersions"
+                - "s3:ListBucket"
+                - "s3:GetBucketVersioning"
+                - "s3:GetBucketNotification"
+                - "s3:PutBucketNotification"
+                - "s3:GetBucketLocation"
+                - "s3:GetBucketTagging"
+              Resource: "arn:aws:s3:::*"
+
+            - Sid: "S3ObjectBackupPermissions"
+              Effect: Allow
+              Action:
+                - "s3:GetObjectAcl"
+                - "s3:GetObject"
+                - "s3:GetObjectVersionTagging"
+                - "s3:GetObjectVersionAcl"
+                - "s3:GetObjectTagging"
+                - "s3:GetObjectVersion"
+              Resource: "arn:aws:s3:::*/*"
+
+            - Sid: "S3GlobalPermissions"
+              Effect: Allow
+              Action:
+                - "s3:ListAllMyBuckets"
+              Resource: "*"
+
+            - Sid: "KMSBackupPermissions"
+              Effect: Allow
+              Action:
+                - "kms:Decrypt"
+                - "kms:DescribeKey"
+              Resource: "*"
+              Condition:
+                "StringLike":
+                  "kms:ViaService":
+                    - "s3.*.amazonaws.com"
+
+            - Sid: "EventsPermissions"
+              Effect: Allow
+              Action:
+                - "events:DescribeRule"
+                - "events:EnableRule"
+                - "events:PutRule"
+                - "events:DeleteRule"
+                - "events:PutTargets"
+                - "events:RemoveTargets"
+                - "events:ListTargetsByRule"
+                - "events:DisableRule"
+              Resource: "arn:aws:events:*:*:rule/AwsBackupManagedRule*"
+
+            - Sid: "EventsMetricsGlobalPermissions"
+              Effect: Allow
+              Action:
+                - "cloudwatch:GetMetricData"
+                - "events:ListRules"
+              Resource: "*"
+
+  S3RestorePolicy:
+      Type: "AWS::IAM::ManagedPolicy"
+      Properties:
+        ManagedPolicyName: !Sub ${SystemName}-${Env}-s3-restore-policy
+        Path: /
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: "S3BucketRestorePermissions"
+              Effect: Allow
+              Action:
+                - "s3:CreateBucket"
+                - "s3:ListBucketVersions"
+                - "s3:ListBucket"
+                - "s3:GetBucketVersioning"
+                - "s3:GetBucketLocation"
+                - "s3:PutBucketVersioning"
+              Resource: "arn:aws:s3:::*"
+
+            - Sid: "S3ObjectRestorePermissions"
+              Effect: Allow
+              Action:
+                - "s3:GetObject"
+                - "s3:GetObjectVersion"
+                - "s3:DeleteObject"
+                - "s3:PutObjectVersionAcl"
+                - "s3:GetObjectVersionAcl"
+                - "s3:GetObjectTagging"
+                - "s3:PutObjectTagging"
+                - "s3:GetObjectAcl"
+                - "s3:PutObjectAcl"
+                - "s3:PutObject"
+                - "s3:ListMultipartUploadParts"
+              Resource: "arn:aws:s3:::*/*"
+
+            - Sid: "S3KMSPermissions"
+              Effect: Allow
+              Action:
+                - "kms:Decrypt"
+                - "kms:DescribeKey"
+                - "kms:GenerateDataKey"
+              Resource: "*"
+              Condition:
+                "StringLike":
+                  "kms:ViaService":
+                    - "s3.*.amazonaws.com"
+
+  AWSBackupRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        RoleName: !Sub ${SystemName}-${Env}-backup-role
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "backup.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+        Path: /
+        ManagedPolicyArns:
+          - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+          - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+          - !Ref S3BackupPolicy
+          - !Ref S3RestorePolicy
+        Tags:
+          - Key: Name
+            Value: !Sub ${SystemName}-${Env}-backup-role
+          - Key: System
+            Value: !Sub ${SystemName}
+          - Key: Env
+            Value: !Sub ${Env}
+Outputs:
+  BackupVaultName:
+    Description: Generic AWS Backup Vault
+    Value: !Ref BackupVault
+    # Export:
+    #   Name: BackupVaultName
+
+  DailyBackupPlanArn:
+    Description: Generic DailyBackup Plan
+    Value: !GetAtt DailyBackupPlan.BackupPlanArn
+    # Export:
+    #   Name: DailyBackupPlanArn
+
+  WeeklyBackupPlanArn:
+    Description: Generic WeeklyBackup Plan
+    Value: !GetAtt WeeklyBackupPlan.BackupPlanArn
+    # Export:
+    #   Name: WeeklyBackupPlanArn
+
+  MonthlyBackupPlanArn:
+    Description: Generic MonthlyBackup Plan
+    Value: !GetAtt MonthlyBackupPlan.BackupPlanArn
+    # Export:
+    #   Name: MonthlyBackupPlanArn
+
+  AWSBackupRoleArn:
+    Description: IAM Role for AWS Backup
+    Value: !GetAtt AWSBackupRole.Arn
+    # Export:
+    #   Name: AWSBackupRoleArn
+
+  S3BackupPolicyArn:
+    Description: IAM Policy for S3 Backup
+    Value: !Ref S3BackupPolicy
+    # Export:
+    #   Name: S3BackupPolicy
+
+  S3RestorePolicyArn:
+    Description: IAM Policy for S3 Restore
+    Value: !Ref S3RestorePolicy
+    # Export:
+    #   Name: S3RestorePolicyArn
